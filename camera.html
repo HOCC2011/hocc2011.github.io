@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>iPad Video Recorder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 48px;
+            width: 48px;
+            border-radius: 50%;
+            background: transparent;
+            cursor: pointer;
+            margin-top: -22px; 
+        }
+        
+        /* Prevent selection and touch highlights */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
+</head>
+<body class="bg-black font-sans text-gray-900 overflow-hidden w-full h-full fixed inset-0">
+
+    <!-- 
+      FIX: Changed from class="hidden" to opacity-0. 
+      iOS Safari stops updating video frames if display is none.
+    -->
+    <video id="sourceVideo" class="absolute top-0 left-0 w-1 h-1 opacity-0 pointer-events-none" autoplay playsinline muted></video>
+
+    <!-- Main Canvas Layer (Full Screen) -->
+    <div class="absolute inset-0 w-full h-full z-0 bg-black">
+        <canvas id="mainCanvas" class="w-full h-full object-cover"></canvas>
+    </div>
+
+    <!-- Top Status Pill -->
+    <div id="topPillContainer" class="absolute top-6 left-0 w-full flex justify-center pointer-events-none z-20 transition-opacity duration-300">
+        <div class="bg-white/30 backdrop-blur-2xl border border-white/20 px-4 py-1.5 rounded-full flex items-center gap-2 shadow-lg">
+            <div id="statusLive" class="flex items-center gap-2">
+                <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span class="text-gray-900 text-xs font-medium tracking-wide drop-shadow-sm">LIVE</span>
+                <span id="liveTimer" class="text-gray-700 text-xs font-mono pl-2 border-l border-gray-500/30">0:00.0</span>
+            </div>
+            <div id="statusHistory" class="hidden items-center gap-2">
+                <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span class="text-gray-900 text-xs font-medium tracking-wide drop-shadow-sm">HISTORY</span>
+                <span id="historyTimer" class="text-gray-700 text-xs font-mono pl-2 border-l border-gray-500/30">0:00.0 / 0:00.0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Overlay -->
+    <div id="errorOverlay" class="hidden absolute inset-0 bg-black/80 flex items-center justify-center p-6 z-50">
+        <div class="bg-white/10 backdrop-blur-lg p-6 rounded-2xl text-center border border-white/20">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-400 mx-auto mb-3"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <p id="errorMessage" class="text-white text-sm">Error accessing camera</p>
+            <button onclick="startCamera()" class="mt-4 bg-white text-black px-4 py-2 rounded-full text-sm font-medium">Retry</button>
+        </div>
+    </div>
+
+    <!-- Floating Control Island -->
+    <div id="controlIsland" class="absolute bottom-8 left-6 right-6 bg-white/30 backdrop-blur-2xl rounded-[2rem] shadow-2xl z-30 transition-all duration-300 cubic-bezier(0.4, 0, 0.2, 1) border border-white/20 flex flex-col overflow-hidden h-48">
+        
+        <button id="toggleMinimizeBtn" class="absolute top-0 right-0 p-4 text-gray-800 hover:text-black transition-colors z-40 outline-none">
+            <svg id="iconMinimize" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            <svg id="iconMaximize" class="hidden" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+        </button>
+
+        <!-- Minimized Content -->
+        <div id="minimizedContent" class="absolute inset-0 flex items-center px-6 transition-opacity duration-300 opacity-0 pointer-events-none">
+            <div class="flex items-center gap-3">
+                <div id="minimizedIndicator" class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></div>
+                <span id="minimizedText" class="text-sm font-semibold text-gray-900 drop-shadow-sm">Recording in Background</span>
+                <span id="minimizedTimer" class="text-xs font-mono text-gray-600 border-l border-gray-500/30 pl-3 ml-1">0:00.0</span>
+            </div>
+        </div>
+
+        <!-- Expanded Content -->
+        <div id="expandedContent" class="flex flex-col h-full px-8 pb-6 pt-5 transition-opacity duration-200 opacity-100 delay-75">
+            
+            <div class="flex justify-between items-center mb-auto">
+                <div class="flex items-center gap-2">
+                    <button id="returnLiveBtn" class="hidden flex items-center gap-1 text-blue-700 hover:text-blue-900 active:scale-95 transition-all font-medium text-sm bg-blue-50/50 hover:bg-blue-50/80 px-3 py-1.5 rounded-full border border-blue-100/50 backdrop-blur-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                        Return to Live
+                    </button>
+                    <span id="recordingStatus" class="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>
+                        Recording Live
+                    </span>
+                </div>
+                <div class="w-8"></div>
+            </div>
+
+            <div class="relative w-auto mx-4 h-14 flex items-center justify-center group mt-2">
+                <div class="absolute top-1/2 -translate-y-1/2 w-full h-2 bg-gray-400/40 rounded-full overflow-hidden backdrop-blur-sm">
+                    <div id="trackFill" class="h-full transition-all duration-150 bg-red-500/90" style="width: 100%"></div>
+                </div>
+
+                <div id="floatingTimestamp" class="hidden absolute top-0 px-2.5 py-1 bg-black/80 text-white text-[10px] font-mono font-bold rounded shadow-lg pointer-events-none transition-all duration-75 z-40 backdrop-blur-md" style="left: 50%; transform: translateX(-50%) translateY(-80%);">
+                    <span id="floatingTimeText">0:00.0</span>
+                    <div class="absolute top-full left-1/2 transform -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-black/80"></div>
+                </div>
+
+                <input id="timelineSlider" type="range" min="0" max="0" step="1" value="0" class="absolute w-full h-full opacity-0 z-30">
+
+                <div id="sliderThumb" class="absolute top-1/2 h-8 w-8 bg-white rounded-full shadow-lg border border-white/50 z-20 pointer-events-none transition-transform duration-150" style="left: 100%; transform: translate(-50%, -50%);">
+                    <div id="thumbDot" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-red-500"></div>
+                </div>
+            </div>
+
+            <div class="text-center mt-1">
+                <span id="bufferInfo" class="text-[10px] text-gray-600 font-medium uppercase tracking-widest drop-shadow-sm">
+                    Buffer: 0.0s
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CAPTURE_INTERVAL_MS = 100;
+        
+        // State
+        let frames = []; 
+        let bufferSize = 0;
+        let playbackIndex = -1; // -1 means LIVE
+        let isLive = true;
+        let isDragging = false;
+        let isMinimized = false;
+        let offscreenCanvas = null;
+        
+        // Elements
+        const videoEl = document.getElementById('sourceVideo');
+        const canvasEl = document.getElementById('mainCanvas');
+        const ctx = canvasEl.getContext('2d');
+        
+        // UI Elements
+        const liveTimerEl = document.getElementById('liveTimer');
+        const historyTimerEl = document.getElementById('historyTimer');
+        const statusLiveEl = document.getElementById('statusLive');
+        const statusHistoryEl = document.getElementById('statusHistory');
+        const timelineSlider = document.getElementById('timelineSlider');
+        const trackFill = document.getElementById('trackFill');
+        const sliderThumb = document.getElementById('sliderThumb');
+        const thumbDot = document.getElementById('thumbDot');
+        const returnLiveBtn = document.getElementById('returnLiveBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const floatingTimestamp = document.getElementById('floatingTimestamp');
+        const floatingTimeText = document.getElementById('floatingTimeText');
+        const bufferInfo = document.getElementById('bufferInfo');
+        const controlIsland = document.getElementById('controlIsland');
+        const toggleMinimizeBtn = document.getElementById('toggleMinimizeBtn');
+        const iconMinimize = document.getElementById('iconMinimize');
+        const iconMaximize = document.getElementById('iconMaximize');
+        const minimizedContent = document.getElementById('minimizedContent');
+        const expandedContent = document.getElementById('expandedContent');
+        const minimizedIndicator = document.getElementById('minimizedIndicator');
+        const minimizedText = document.getElementById('minimizedText');
+        const minimizedTimer = document.getElementById('minimizedTimer');
+        const topPillContainer = document.getElementById('topPillContainer');
+
+        async function startCamera() {
+            document.getElementById('errorOverlay').classList.add('hidden');
+            try {
+                const constraints = {
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoEl.srcObject = stream;
+                
+                // Explicitly play to ensure it starts on iOS
+                await videoEl.play();
+                
+            } catch (err) {
+                console.error("Camera failed:", err);
+                document.getElementById('errorOverlay').classList.remove('hidden');
+                document.getElementById('errorMessage').innerText = err.message || "Camera access denied";
+            }
+        }
+
+        function formatTime(frameIndex) {
+            const targetIndex = isLive ? bufferSize : frameIndex;
+            const totalSeconds = (targetIndex * CAPTURE_INTERVAL_MS) / 1000;
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = Math.floor(totalSeconds % 60);
+            const ms = Math.floor((totalSeconds % 1) * 10);
+            return `${mins}:${secs.toString().padStart(2, '0')}.${ms}`;
+        }
+
+        function updateUI() {
+            const timeStr = formatTime(isLive ? bufferSize : playbackIndex);
+            liveTimerEl.innerText = timeStr;
+            const totalTimeStr = formatTime(bufferSize);
+            historyTimerEl.innerText = `${timeStr} / ${totalTimeStr}`;
+            minimizedTimer.innerText = timeStr;
+            bufferInfo.innerText = `Buffer: ${((bufferSize * CAPTURE_INTERVAL_MS)/1000).toFixed(1)}s`;
+
+            if (isLive) {
+                timelineSlider.max = bufferSize;
+                if (!isDragging) timelineSlider.value = bufferSize;
+            } else {
+                timelineSlider.max = bufferSize;
+                if (!isDragging) timelineSlider.value = playbackIndex;
+            }
+
+            const percent = bufferSize === 0 ? 0 : ((isLive ? bufferSize : playbackIndex) / bufferSize) * 100;
+            
+            trackFill.style.width = `${percent}%`;
+            sliderThumb.style.left = `${percent}%`;
+            floatingTimestamp.style.left = `${percent}%`;
+            
+            if (isLive) {
+                trackFill.classList.remove('bg-blue-600/90');
+                trackFill.classList.add('bg-red-500/90');
+                thumbDot.classList.remove('bg-blue-600');
+                thumbDot.classList.add('bg-red-500');
+                minimizedIndicator.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse";
+                minimizedText.innerText = "Recording in Background";
+            } else {
+                trackFill.classList.remove('bg-red-500/90');
+                trackFill.classList.add('bg-blue-600/90');
+                thumbDot.classList.remove('bg-red-500');
+                thumbDot.classList.add('bg-blue-600');
+                minimizedIndicator.className = "w-2.5 h-2.5 rounded-full bg-blue-500";
+                minimizedText.innerText = "Reviewing History";
+            }
+
+            if (isLive) {
+                statusLiveEl.classList.remove('hidden');
+                statusLiveEl.classList.add('flex');
+                statusHistoryEl.classList.add('hidden');
+                statusHistoryEl.classList.remove('flex');
+                returnLiveBtn.classList.add('hidden');
+                recordingStatus.classList.remove('hidden');
+                recordingStatus.classList.add('flex');
+                floatingTimestamp.classList.add('hidden');
+            } else {
+                statusLiveEl.classList.add('hidden');
+                statusLiveEl.classList.remove('flex');
+                statusHistoryEl.classList.remove('hidden');
+                statusHistoryEl.classList.add('flex');
+                returnLiveBtn.classList.remove('hidden');
+                recordingStatus.classList.add('hidden');
+                recordingStatus.classList.remove('flex');
+                floatingTimestamp.classList.remove('hidden');
+                floatingTimeText.innerText = timeStr;
+            }
+        }
+
+        // Capture Loop
+        setInterval(() => {
+            // Only capture if video has data
+            if (videoEl.readyState < 2) return;
+
+            const w = videoEl.videoWidth / 2;
+            const h = videoEl.videoHeight / 2;
+
+            if (!offscreenCanvas) {
+                offscreenCanvas = document.createElement('canvas');
+            }
+            if (offscreenCanvas.width !== w) {
+                offscreenCanvas.width = w;
+                offscreenCanvas.height = h;
+            }
+            
+            const offCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true });
+            offCtx.drawImage(videoEl, 0, 0, w, h);
+            const frameData = offCtx.getImageData(0, 0, w, h);
+            
+            frames.push(frameData);
+            bufferSize = frames.length;
+            updateUI();
+        }, CAPTURE_INTERVAL_MS);
+
+        // Render Loop
+        function render() {
+            // Check readyState to ensure video is playing
+            if (videoEl.readyState >= 2) {
+                const w = videoEl.videoWidth / 2;
+                const h = videoEl.videoHeight / 2;
+                
+                if (canvasEl.width !== w) canvasEl.width = w;
+                if (canvasEl.height !== h) canvasEl.height = h;
+
+                if (isLive) {
+                    ctx.drawImage(videoEl, 0, 0, w, h);
+                } else {
+                    const safeIndex = Math.max(0, Math.min(playbackIndex, frames.length - 1));
+                    const frame = frames[safeIndex];
+                    if (frame) {
+                        ctx.putImageData(frame, 0, 0);
+                    }
+                }
+            }
+            requestAnimationFrame(render);
+        }
+
+        timelineSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (val >= bufferSize - 1) {
+                isLive = true;
+                playbackIndex = -1;
+            } else {
+                isLive = false;
+                playbackIndex = val;
+            }
+            updateUI();
+        });
+
+        timelineSlider.addEventListener('mousedown', () => { isDragging = true; });
+        timelineSlider.addEventListener('mouseup', () => { isDragging = false; });
+        timelineSlider.addEventListener('touchstart', () => { isDragging = true; });
+        timelineSlider.addEventListener('touchend', () => { isDragging = false; });
+
+        returnLiveBtn.addEventListener('click', () => {
+            isLive = true;
+            playbackIndex = -1;
+            updateUI();
+        });
+
+        toggleMinimizeBtn.addEventListener('click', () => {
+            isMinimized = !isMinimized;
+            if (isMinimized) {
+                controlIsland.classList.remove('h-48');
+                controlIsland.classList.add('h-16');
+                iconMinimize.classList.add('hidden');
+                iconMaximize.classList.remove('hidden');
+                expandedContent.classList.remove('opacity-100', 'delay-75');
+                expandedContent.classList.add('opacity-0', 'pointer-events-none');
+                minimizedContent.classList.remove('opacity-0', 'pointer-events-none');
+                minimizedContent.classList.add('opacity-100', 'pointer-events-auto');
+                topPillContainer.classList.add('opacity-0');
+            } else {
+                controlIsland.classList.remove('h-16');
+                controlIsland.classList.add('h-48');
+                iconMinimize.classList.remove('hidden');
+                iconMaximize.classList.add('hidden');
+                expandedContent.classList.remove('opacity-0', 'pointer-events-none');
+                expandedContent.classList.add('opacity-100', 'delay-75');
+                minimizedContent.classList.remove('opacity-100', 'pointer-events-auto');
+                minimizedContent.classList.add('opacity-0', 'pointer-events-none');
+                topPillContainer.classList.remove('opacity-0');
+            }
+        });
+
+        // Handle visibility change to resume playback if tab was backgrounded
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && videoEl.paused) {
+                videoEl.play().catch(e => console.log("Resume play failed", e));
+            }
+        });
+
+        // Init
+        startCamera();
+        requestAnimationFrame(render);
+
+    </script>
+</body>
+</html>
+
+

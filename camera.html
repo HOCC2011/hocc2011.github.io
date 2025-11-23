@@ -394,4 +394,116 @@
                 timelineSlider.value = playbackIndex;
             }
             
-            const percen
+            const percent = bufferSize === 0 ? 0 : (currentIndex / bufferSize) * 100;
+            trackFill.style.width = `${percent}%`;
+            sliderThumb.style.left = `${percent}%`;
+            floatingTimestamp.style.left = `${percent}%`;
+
+            if (isLiveView) {
+                trackFill.classList.replace('bg-blue-600/90', 'bg-red-500/90') || trackFill.classList.add('bg-red-500/90');
+                thumbDot.classList.replace('bg-blue-600', 'bg-red-500') || thumbDot.classList.add('bg-red-500');
+                
+                statusLiveEl.classList.remove('hidden'); statusLiveEl.classList.add('flex');
+                statusHistoryEl.classList.remove('flex'); statusHistoryEl.classList.add('hidden');
+                
+                minimizedIndicator.className = "w-2.5 h-2.5 min-w-[0.625rem] rounded-full bg-red-500 animate-pulse";
+                minimizedText.innerText = isCapturing ? "Recording Live" : "Ready";
+                
+                floatingTimestamp.classList.add('hidden');
+                
+                if(isCapturing) {
+                    stopBtn.classList.remove('hidden');
+                    returnLiveBtn.classList.add('hidden');
+                    recordingStatus.classList.remove('hidden');
+                }
+
+            } else {
+                trackFill.classList.replace('bg-red-500/90', 'bg-blue-600/90');
+                thumbDot.classList.replace('bg-red-500', 'bg-blue-600');
+                
+                statusLiveEl.classList.remove('flex'); statusLiveEl.classList.add('hidden');
+                statusHistoryEl.classList.remove('hidden'); statusHistoryEl.classList.add('flex');
+
+                minimizedIndicator.className = "w-2.5 h-2.5 min-w-[0.625rem] rounded-full bg-blue-500";
+                minimizedText.innerText = isCapturing ? "Recording (Review)" : "Session Review";
+                
+                floatingTimestamp.classList.remove('hidden');
+                floatingTimeText.innerText = timeStr;
+                
+                if(isCapturing) {
+                    stopBtn.classList.add('hidden');
+                    returnLiveBtn.classList.remove('hidden');
+                    recordingStatus.classList.add('hidden');
+                }
+            }
+        }
+
+        startBtn.addEventListener('click', startSession);
+        stopBtn.addEventListener('click', stopSession);
+        returnLiveBtn.addEventListener('click', returnToLive);
+        newSessionBtn.addEventListener('click', () => {
+            controlIsland.classList.add('translate-y-[150%]');
+            topPillContainer.classList.add('opacity-0');
+            startOverlay.classList.remove('opacity-0', 'pointer-events-none');
+        });
+        downloadBtn.addEventListener('click', downloadVideo);
+
+        timelineSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            if (val >= bufferSize - 1) {
+                isLiveView = true;
+                playbackIndex = -1;
+            } else {
+                isLiveView = false;
+                playbackIndex = val;
+            }
+            updateUI();
+        });
+
+        timelineSlider.addEventListener('mousedown', () => isDragging = true);
+        timelineSlider.addEventListener('mouseup', () => isDragging = false);
+        timelineSlider.addEventListener('touchstart', () => isDragging = true);
+        timelineSlider.addEventListener('touchend', () => isDragging = false);
+
+        // TOGGLE MINIMIZE LOGIC with DISPLAY:NONE management
+        toggleMinimizeBtn.addEventListener('click', () => {
+            isMinimized = !isMinimized;
+            if (isMinimized) {
+                // Minimize
+                controlIsland.classList.replace('h-48', 'h-16');
+                iconMinimize.classList.add('hidden'); iconMaximize.classList.remove('hidden');
+                topPillContainer.classList.add('opacity-0');
+
+                // Hide Expanded Content completely
+                expandedContent.classList.add('hidden'); 
+                
+                // Show Minimized Content
+                minimizedContent.classList.remove('hidden');
+                // Trigger reflow for transition? (Optional, simplified here for strict non-overlap)
+                requestAnimationFrame(() => {
+                     minimizedContent.classList.remove('opacity-0');
+                });
+
+            } else {
+                // Expand
+                controlIsland.classList.replace('h-16', 'h-48');
+                iconMinimize.classList.remove('hidden'); iconMaximize.classList.add('hidden');
+                topPillContainer.classList.remove('opacity-0');
+
+                // Hide Minimized Content
+                minimizedContent.classList.add('hidden');
+                minimizedContent.classList.add('opacity-0');
+
+                // Show Expanded Content
+                expandedContent.classList.remove('hidden');
+                // Slight delay for opacity to animate if desired, but 'hidden' toggles instantly
+                expandedContent.classList.remove('opacity-0');
+            }
+        });
+
+        initCamera();
+        requestAnimationFrame(render);
+
+    </script>
+</body>
+</html>

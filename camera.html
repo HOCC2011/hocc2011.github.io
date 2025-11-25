@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Camera Feed</title>
+    <title>iPad Video Recorder</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         input[type=range] {
@@ -219,18 +219,18 @@
         const expandedContent = document.getElementById('expandedContent');
         const minimizedIndicator = document.getElementById('minimizedIndicator');
         const minimizedText = document.getElementById('minimizedText');
-        const minimizedTimer = document.getElementById('minimizedTimer');
-        const iconMinimize = document.getElementById('iconMinimize');
-        const iconMaximize = document.getElementById('iconMaximize');
-
+        // --- CAMERA INIT ---
         async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: true, 
-                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+                    // CHANGED: Increased to 1080p for sharper image
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
                 });
                 videoEl.srcObject = stream;
                 await videoEl.play();
+                
+                // Mute preview to prevent feedback loop, but record audio
                 videoEl.muted = true; 
             } catch (err) {
                 console.error(err);
@@ -323,8 +323,9 @@
         function captureFrame() {
             if (videoEl.readyState < 2) return;
 
-            const w = videoEl.videoWidth / 2;
-            const h = videoEl.videoHeight / 2;
+            // CHANGED: Removed "/ 2" to capture FULL resolution
+            const w = videoEl.videoWidth;
+            const h = videoEl.videoHeight;
 
             if (!offscreenCanvas) offscreenCanvas = document.createElement('canvas');
             if (offscreenCanvas.width !== w) {
@@ -342,17 +343,25 @@
             updateUI();
         }
 
+        // --- RENDER LOOP ---
         function render() {
-            const w = videoEl.videoWidth / 2;
-            const h = videoEl.videoHeight / 2;
+            // If capturing or live preview, draw video
+            // If session ended, draw frame from buffer
+            
+            // CHANGED: Removed "/ 2" to render FULL resolution
+            const w = videoEl.videoWidth;
+            const h = videoEl.videoHeight;
             
             if (videoEl.readyState >= 2) {
                 if (canvasEl.width !== w) canvasEl.width = w;
                 if (canvasEl.height !== h) canvasEl.height = h;
 
                 if (isLiveView) {
+                    // Live Feed
                     ctx.drawImage(videoEl, 0, 0, w, h);
                 } else {
+                    // Replay Frame (from history)
+                    // Use playbackIndex if set, otherwise last frame
                     const idx = playbackIndex === -1 ? bufferSize - 1 : playbackIndex;
                     const safeIndex = Math.max(0, Math.min(idx, frames.length - 1));
                     const frame = frames[safeIndex];

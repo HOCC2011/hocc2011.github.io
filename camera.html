@@ -25,21 +25,6 @@
             user-select: none;
             -webkit-user-select: none;
         }
-        /* Smooth fade transitions */
-        .fade-enter {
-            opacity: 0;
-        }
-        .fade-enter-active {
-            opacity: 1;
-            transition: opacity 300ms ease-in;
-        }
-        .fade-exit {
-            opacity: 1;
-        }
-        .fade-exit-active {
-            opacity: 0;
-            transition: opacity 200ms ease-out;
-        }
     </style>
 </head>
 <body class="bg-black font-sans text-gray-900 overflow-hidden w-full h-full fixed inset-0">
@@ -219,18 +204,18 @@
         const expandedContent = document.getElementById('expandedContent');
         const minimizedIndicator = document.getElementById('minimizedIndicator');
         const minimizedText = document.getElementById('minimizedText');
-        // --- CAMERA INIT ---
+        const minimizedTimer = document.getElementById('minimizedTimer');
+        const iconMinimize = document.getElementById('iconMinimize');
+        const iconMaximize = document.getElementById('iconMaximize');
+
         async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: true, 
-                    // CHANGED: Increased to 1080p for sharper image
                     video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
                 });
                 videoEl.srcObject = stream;
                 await videoEl.play();
-                
-                // Mute preview to prevent feedback loop, but record audio
                 videoEl.muted = true; 
             } catch (err) {
                 console.error(err);
@@ -323,7 +308,6 @@
         function captureFrame() {
             if (videoEl.readyState < 2) return;
 
-            // CHANGED: Removed "/ 2" to capture FULL resolution
             const w = videoEl.videoWidth;
             const h = videoEl.videoHeight;
 
@@ -343,12 +327,7 @@
             updateUI();
         }
 
-        // --- RENDER LOOP ---
         function render() {
-            // If capturing or live preview, draw video
-            // If session ended, draw frame from buffer
-            
-            // CHANGED: Removed "/ 2" to render FULL resolution
             const w = videoEl.videoWidth;
             const h = videoEl.videoHeight;
             
@@ -357,11 +336,8 @@
                 if (canvasEl.height !== h) canvasEl.height = h;
 
                 if (isLiveView) {
-                    // Live Feed
                     ctx.drawImage(videoEl, 0, 0, w, h);
                 } else {
-                    // Replay Frame (from history)
-                    // Use playbackIndex if set, otherwise last frame
                     const idx = playbackIndex === -1 ? bufferSize - 1 : playbackIndex;
                     const safeIndex = Math.max(0, Math.min(idx, frames.length - 1));
                     const frame = frames[safeIndex];
@@ -454,6 +430,9 @@
             controlIsland.classList.add('translate-y-[150%]');
             topPillContainer.classList.add('opacity-0');
             startOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            
+            // FIX: Immediately resume live video feed so user can see camera before starting
+            isLiveView = true;
         });
         downloadBtn.addEventListener('click', downloadVideo);
 
@@ -474,7 +453,6 @@
         timelineSlider.addEventListener('touchstart', () => isDragging = true);
         timelineSlider.addEventListener('touchend', () => isDragging = false);
 
-        // TOGGLE MINIMIZE LOGIC with DISPLAY:NONE management
         toggleMinimizeBtn.addEventListener('click', () => {
             isMinimized = !isMinimized;
             if (isMinimized) {
@@ -483,15 +461,15 @@
                 iconMinimize.classList.add('hidden'); iconMaximize.classList.remove('hidden');
                 topPillContainer.classList.add('opacity-0');
 
-                // Hide Expanded Content completely
                 expandedContent.classList.add('hidden'); 
                 
-                // Show Minimized Content
                 minimizedContent.classList.remove('hidden');
-                // Trigger reflow for transition? (Optional, simplified here for strict non-overlap)
                 requestAnimationFrame(() => {
                      minimizedContent.classList.remove('opacity-0');
                 });
+
+                // ADDED: Center the maximize icon vertically in minimized state
+                toggleMinimizeBtn.classList.add('h-full', 'flex', 'items-center');
 
             } else {
                 // Expand
@@ -499,14 +477,14 @@
                 iconMinimize.classList.remove('hidden'); iconMaximize.classList.add('hidden');
                 topPillContainer.classList.remove('opacity-0');
 
-                // Hide Minimized Content
                 minimizedContent.classList.add('hidden');
                 minimizedContent.classList.add('opacity-0');
 
-                // Show Expanded Content
                 expandedContent.classList.remove('hidden');
-                // Slight delay for opacity to animate if desired, but 'hidden' toggles instantly
                 expandedContent.classList.remove('opacity-0');
+
+                // ADDED: Reset vertical centering
+                toggleMinimizeBtn.classList.remove('h-full', 'flex', 'items-center');
             }
         });
 

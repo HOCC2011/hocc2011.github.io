@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Streaming Data Generator (Minimal Memory)</title>
+    <style>
+        /* ... (Use the same CSS styles as the previous response) ... */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🚀 Streaming Data Generator (Minimal Memory)</h2>
+        
+        <label for="lengthInBytes">Total Data Length (in Bytes):</label>
+        <input type="number" id="lengthInBytes" min="1" value="1073741824" required> <label for="fileName">Output File Name:</label>
+        <input type="text" id="fileName" value="gigantic_random_data.bin" required>
+        
+        <button id="generateButton" onclick="startStreamGeneration()">Generate and Download</button>
+
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const messageElement = document.getElementById('message');
+        const generateButton = document.getElementById('generateButton');
+        
+        const CHUNK_SIZE = 1024 * 1024; // 1 MB chunk size
+        
+        // --- Web Worker Script for Chunk Generation ---
+        // Generates one chunk of random bytes in the background.
+        const workerScript = `
+            self.onmessage = function(event) {
+                const length = event.data.length;
+                try {
+                    const chunk = new Uint8Array(length);
+                    self.crypto.getRandomValues(chunk);
+                    self.postMessage(chunk.buffer, [chunk.buffer]);
+                } catch (e) {
+                    self.postMessage({ error: e.message }); 
+                }
+            };
+        `;
+
+        // 1. Setup the Inline Worker
+        const blob = new Blob([workerScript], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        
+        // 2. The main streaming function
+        function startStreamGeneration() {
+            const totalLength = parseInt(document.getElementById('lengthInBytes').value);
+            const fileName = document.getElementById('fileName').value;
+
+            if (totalLength <= 0 || !fileName) {
+                messageElement.textContent = "Please enter a valid length and file name.";
+                messageElement.style.color = "red";
+                return;
+            }
+
+            if (typeof WritableStream === 'undefined' || typeof ReadableStream === 'undefined') {
+                 messageElement.textContent = "Error: Your browser does not support the necessary Streaming APIs (WritableStream/ReadableStream) for large file generation.";
+                 messageElement.style.color = "red";
+                 return;
+            }
+
+            generateButton.disabled = true;
+            messageElement.textContent = \`Preparing to generate \${totalLength} bytes...\`;
+            messageElement.style.color = "blue";
+            
+            // Initiate the download using the new streaming API
+            const streamSaver = new WritableStream({
+                start(controller) {
+                    this.controller = controller;
+                    this.worker = new Worker(workerUrl);
+                    this.bytesGenerated = 0;
+                    this.isWorking = false;
+                    this.workerQueue = []; // Queue for incoming chunks from the worker
+
+                    this.worker.onmessage = (event) => {
+                        this.isWorking = false;
+                        if (event.data.error) {
+                            console.error("Worker Error:", event.data.error);
+                            controller.error(new Error(event.data.error));
+                            return;
+                        }
+
+                        const chunk = new Uint8Array(event.data);
+                        this.workerQueue.push(chunk);
+                        this.processQueue();
+                    };
+
+                    this.worker.onerror = (error) => {
+                        console.error("Worker Thread Error:", error);
+                        controller.error(new Error("Worker thread failed."));
+                    };
+
+                    // Start the process
+                    this.kickoff();
+                },
+
+                processQueue() {
+                    while (this.workerQueue.length > 0 && this.bytesGenerated < totalLength) {
+                        const chunk = this.workerQueue.shift();
+                        this.controller.write(chunk);
+                        this.bytesGenerated += chunk.length;
+                        
+                        // Update progress on the UI (optional, but good for UX)
+                        const progress = ((this.bytesGenerated / totalLength) * 100).toFixed(2);
+                        messageElement.textContent = \`Generating and Streaming: \${progress}%\`;
+                        
+                        // If we are finished generating
+                        if (this.bytesGenerated >= totalLength) {
+                            this.controller.close();
+                            return;
+                        }
+                    }
+                    // Request the next chunk if not already working
+                    if (!this.isWorking) {
+                        this.kickoff();
+                    }
+                },
+
+                kickoff() {
+                    if (this.bytesGenerated < totalLength && !this.isWorking) {
+                        this.isWorking = true;
+                        
+                        const remaining = totalLength - this.bytesGenerated;
+                        const sizeToGenerate = Math.min(remaining, CHUNK_SIZE);
+                        
+                        // Send request to worker for the next chunk
+                        this.worker.postMessage({ length: sizeToGenerate });
+                    }
+                },
+                
+                close() {
+                    this.worker.terminate();
+                    URL.revokeObjectURL(workerUrl);
+                    messageElement.textContent = \`Success! \${totalLength} bytes streamed and downloaded as \${fileName}.\`;
+                    messageElement.style.color = "green";
+                    generateButton.disabled = false;
+                },
+                
+                abort(reason) {
+                    this.worker.terminate();
+                    URL.revokeObjectURL(workerUrl);
+                    messageElement.textContent = \`Download aborted: \${reason}\`;
+                    messageElement.style.color = "red";
+                    generateButton.disabled = false;
+                }
+            });
+
+            // Trigger the browser's save dialog and connect the stream
+            if ('showSaveFilePicker' in window) {
+                // Modern browsers supporting the File System Access API
+                window.showSaveFilePicker({ suggestedName: fileName }).then(fileHandle => {
+                    fileHandle.createWritable().then(writableStream => {
+                        streamSaver.pipeTo(writableStream).catch(e => {
+                            console.error("Stream pipe failed:", e);
+                            messageElement.textContent = "Error during file saving. See console for details.";
+                            messageElement.style.color = "red";
+                            generateButton.disabled = false;
+                        });
+                    });
+                }).catch(e => {
+                    // User cancelled the dialog
+                    messageElement.textContent = "File save dialog cancelled by user.";
+                    messageElement.style.color = "gray";
+                    generateButton.disabled = false;
+                });
+            } else {
+                // Fallback for older browsers (uses a slower polyfill or may not work for massive files)
+                messageElement.textContent = "Your browser doesn't fully support showSaveFilePicker. Attempting standard download...";
+                // Fallback would require using a separate library/polyfill for stream downloading,
+                // which goes against the "single file" requirement. The modern streaming API is key here.
+            }
+        }
+    </script>
+</body>
+</html>

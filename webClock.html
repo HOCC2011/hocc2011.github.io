@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Date & Time Clock</title>
+    <!-- Google Font: Fredoka for exact visual match -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            user-select: none;
+            overflow: hidden;
+            font-family: 'Fredoka', sans-serif;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        /* Smooth background and color transitions */
+        .theme-transition {
+            transition: background-color 1s ease-in-out, background 1s ease-in-out, color 0.8s ease-in-out;
+        }
+        
+        :root {
+            --star-size-base: clamp(4rem, min(4vw, 4vh), 4rem);
+        }
+
+        /* Morning Sky Theme */
+        .theme-morning {
+            background: linear-gradient(180deg, #3FCAF7 60%, #7FD7F3 100%);
+            color: #ffffff;
+        }
+
+        /* Sunset Sky Theme */
+        .theme-sunset {
+            background: linear-gradient(180deg, #ffab4d 0%, #fe932b 100%);
+            color: #fff8eb;
+        }
+
+        /* Night Sky Theme */
+        .theme-night {
+            background: linear-gradient(180deg, #2a5263 0%, #3e6d80 100%);
+            color: #e5f3f7;
+        }
+
+        /* Floating Cloud Animations */
+        @keyframes floatSlow {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(2.5vw); }
+        }
+
+        @keyframes floatFast {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(-3.5vw); }
+        }
+
+        .animate-cloud-1 {
+            animation: floatSlow 18s ease-in-out infinite;
+        }
+
+        .animate-cloud-2 {
+            animation: floatFast 24s ease-in-out infinite;
+        }
+
+        /* Twinkling Star Animation */
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(0.85); }
+            50% { opacity: 1; transform: scale(1.15); }
+        }
+
+        .animate-star {
+            animation: twinkle 3s ease-in-out infinite;
+        }
+
+        /* Soft Glow effect for Sunset Sun */
+        .sun-glow {
+            background: radial-gradient(circle, rgba(255, 235, 175, 0.45) 0%, rgba(255, 160, 50, 0) 70%);
+        }
+
+        /* Responsive cloud sizes */
+        #skyContainer .animate-cloud-1 {
+            width: clamp(110px, 17vw, 256px) !important;
+        }
+
+        #skyContainer .animate-cloud-2 {
+            width: clamp(140px, 21vw, 320px) !important;
+        }
+
+        #skyContainer .sun-glow {
+            width: clamp(8rem, 28vmin, 24rem) !important;
+            height: clamp(8rem, 28vmin, 24rem) !important;
+            max-width: none;
+        }
+
+        /* Clock Display Sizing (Tightened gap via margin-bottom) */
+        #dateDisplay {
+            font-size: clamp(24px, 4.5vw, 56px) !important;
+            line-height: 1.1;
+            margin-bottom: clamp(-4px, -0.5vw, 2px) !important; /* Reduced space between date and time */
+            max-width: 94vw;
+        }
+
+        #timeDisplay {
+            font-size: clamp(64px, min(22vw, 30vh), 260px) !important;
+            line-height: 0.95;
+            white-space: nowrap;
+            max-width: 96vw;
+        }
+
+        /* Illustration Sizing & Placement */
+        #illustrationContainer {
+            width: auto;
+            max-width: 100%;
+            margin-right: clamp(0.5rem, 2.5vw, 2.5rem);
+        }
+
+        #illustrationContainer svg {
+            display: block;
+            width: clamp(9rem, min(32vw, 42vh), 28rem) !important;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #bodyTheme.theme-night #illustrationContainer svg {
+            width: clamp(10rem, min(36vw, 48vh), 28rem) !important;
+            transform: translateX(72%);
+        }
+
+        /* Ground Bar */
+        #bodyTheme > div:last-of-type > div:last-child {
+            height: clamp(12px, 2.5vh, 56px) !important;
+        }
+
+        /* Cloud and Star Helpers */
+        #skyContainer > div:not(.sun-glow) {
+            max-width: 45vw;
+        }
+
+        #bodyTheme.theme-morning #skyContainer > div {
+            width: clamp(7rem, 20vw, 20rem);
+        }
+
+        #skyContainer svg {
+            width: 100% !important;
+            height: auto !important;
+        }
+
+        #bodyTheme.theme-night #skyContainer > div {
+            width: var(--star-size-base) !important;
+            height: var(--star-size-base) !important;
+        }
+
+        #bodyTheme.theme-night #skyContainer > div.star-small {
+            width: calc(var(--star-size-base) * 0.6) !important;
+            height: calc(var(--star-size-base) * 0.6) !important;
+        }
+
+        #bodyTheme.theme-night #skyContainer > div.star-medium {
+            width: var(--star-size-base) !important;
+            height: var(--star-size-base) !important;
+        }
+
+        #bodyTheme.theme-night #skyContainer > div.star-large {
+            width: calc(var(--star-size-base) * 1.4) !important;
+            height: calc(var(--star-size-base) * 1.4) !important;
+        }
+
+        #bodyTheme.theme-night #skyContainer svg {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* Mobile / Small Screen Fallbacks */
+        @media (max-width: 600px), (max-height: 500px) {
+            #dateDisplay {
+                font-size: clamp(18px, 5.5vw, 36px) !important;
+                margin-bottom: -2px !important;
+            }
+            #timeDisplay {
+                font-size: clamp(52px, 20vw, 120px) !important;
+            }
+            #illustrationContainer svg {
+                width: clamp(6rem, min(27vw, 36vh), 15rem) !important;
+            }
+            #bodyTheme.theme-night #illustrationContainer svg {
+                width: clamp(7rem, min(30vw, 40vh), 17rem) !important;
+                transform: translateX(72%);
+            }
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-between relative theme-transition theme-morning" id="bodyTheme">
+
+    <!-- Sky Layer (Clouds, Stars, Sun Glow) -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden" id="skyContainer">
+        <!-- Dynamic Sky Content injected via JS -->
+    </div>
+
+    <div class="relative z-20 flex-1 flex flex-col items-center justify-center text-center px-4 -mt-12">
+    </div>
+    
+    <!-- Clock Display: Center of Screen Only -->
+    <div class="fixed inset-0 z-40 flex flex-col items-center justify-center text-center px-4 pointer-events-none">
+        <!-- Date Display -->
+        <div id="dateDisplay" class="font-bold tracking-normal opacity-80">
+            01/08/2026 Sat
+        </div>
+
+        <!-- Time Display -->
+        <div id="timeDisplay" class="font-bold tracking-normal leading-none opacity-80">
+            12:30
+        </div>
+    </div>
+
+    <!-- Scene Bottom Area (Illustration & Ground Bar) -->
+    <div class="relative w-full z-20 flex flex-col justify-end">
+        <!-- Illustration Placement (Anchored to Ground Bottom-Right) -->
+        <div class="w-full relative pl-4 flex justify-end">
+            <div id="illustrationContainer" class="relative z-30 transition-all duration-500">
+                <!-- SVG Illustration loaded dynamically -->
+            </div>
+        </div>
+
+        <!-- Grey Ground Bar at Bottom -->
+        <div class="w-full h-5 md:h-14 bg-[#a4aab0] relative z-20 shadow-inner"></div>
+    </div>
+
+    <!-- SVG Templates Library (Hidden) -->
+    <div class="hidden">
+        <!-- Star SVG Template -->
+        <svg id="svg-star-template" class="w-[60px] h-auto" viewBox="0 0 120 120">
+            <path d="M20 0C20 11.0457 28.9543 20 40 20C28.9543 20 20 28.9543 20 40C20 28.9543 11.0457 20 0 20C11.0457 20 20 11.0457 20 0Z" fill="#FFFEE7"/>
+        </svg>
+
+        <!-- Cloud SVG Template -->
+        <svg id="svg-cloud-template" class="w-[150px] h-auto" viewBox="0 0 334 202" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g opacity="0.8">
+                <path d="M266.789 68.459H66.446C29.7489 68.459 0 98.2077 0 134.904C0 171.601 29.7489 201.35 66.446 201.35H266.789C303.486 201.35 333.235 171.601 333.235 134.904C333.235 98.2077 303.486 68.459 266.789 68.459Z" fill="white"/>
+                <path d="M167.624 180.208C217.387 180.208 257.728 139.867 257.728 90.104C257.728 40.3409 217.387 0 167.624 0C117.86 0 77.5195 40.3409 77.5195 90.104C77.5195 139.867 117.86 180.208 167.624 180.208Z" fill="white"/>
+            </g>
+        </svg>
+
+        <!-- Morning Illustration (morning.svg) -->
+        <svg id="svg-morning-template" class="w-[300px] h-auto" viewBox="0 0 462 352" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="153" y="180" width="24" height="72" rx="12" fill="#9C9C9C"/>
+            <path d="M303.798 88.5047C305.294 57.2571 314.074 44.6912 341.078 29.0381" stroke-width="18" stroke-linecap="round" stroke="#00FF00"/>
+            <path d="M242.832 18.7201C275.887 4.04371 292.41 9.25709 311.837 41.2899C313.613 44.2188 312.453 48.054 309.346 49.4964C275.273 65.3154 259.119 58.7928 240.222 26.9318C238.463 23.9662 239.68 20.1193 242.832 18.7201Z" fill="#00FF00"/>
+            <path d="M307 66.2256C373.274 66.2256 427 119.952 427 186.226C427 197.775 425.368 208.943 422.321 219.512C417.872 234.951 404.259 245.531 388.568 248.989C362.645 254.702 335.284 257.761 307.002 257.761C278.718 257.761 251.355 254.702 225.43 248.988C209.739 245.53 196.126 234.95 191.677 219.511C188.632 208.942 187 197.774 187 186.226C187 119.952 240.726 66.2256 307 66.2256Z" fill="#FE700E"/>
+            <path d="M412 240C439.614 240 462 262.386 462 290V352H432V290C432 278.954 423.046 270 412 270H50C38.9543 270 30 278.954 30 290V352H0V290C1.54643e-06 262.386 22.3858 240 50 240H412Z" fill="#F1F1F1"/>
+            <path d="M125.057 232.069C125.555 234.101 128.445 234.101 128.943 232.069L138.518 192.976C138.827 191.716 137.873 190.5 136.575 190.5H117.425C116.127 190.5 115.173 191.716 115.482 192.976L125.057 232.069Z" fill="#DABB9F"/>
+            <path d="M127 177C135.284 177 142 183.716 142 192C142 192.315 141.99 192.627 141.971 192.937C141.775 196.111 138.696 198 135.516 198H118.484C115.304 198 112.225 196.111 112.029 192.937C112.01 192.627 112 192.315 112 192C112 183.716 118.716 177 127 177Z" fill="#CCFFCC"/>
+            <path d="M127 165C135.284 165 142 171.716 142 180C142 180.315 141.99 180.627 141.971 180.937C141.775 184.111 138.696 186 135.516 186H118.484C115.304 186 112.225 184.111 112.029 180.937C112.01 180.627 112 180.315 112 180C112 171.716 118.716 165 127 165Z" fill="#FFE5A4"/>
+            <path d="M128.343 195.997C128.404 194.907 129.359 194.086 130.446 194.189C131.533 194.292 132.317 195.278 132.172 196.36L129.119 219.176C129.045 219.729 128.547 220.125 127.991 220.073C127.435 220.02 127.02 219.537 127.051 218.98L128.343 195.997Z" fill="#CCFFCC"/>
+            <path d="M117.95 196.685C117.447 195.398 118.189 193.962 119.531 193.628C120.872 193.295 122.2 194.218 122.357 195.591L123.058 201.724C123.142 202.465 122.664 203.154 121.94 203.334C121.217 203.513 120.472 203.128 120.2 202.434L117.95 196.685Z" fill="#CCFFCC"/>
+            <path d="M127.892 181.772C127.414 180.436 128.195 178.981 129.571 178.639C130.948 178.297 132.318 179.219 132.521 180.623L133.85 189.827C133.958 190.572 133.484 191.276 132.754 191.458C132.024 191.639 131.276 191.238 131.023 190.53L127.892 181.772Z" fill="#FFE5A4"/>
+            <path d="M134.785 183.618C134.372 182.059 135.446 180.499 137.049 180.327C138.653 180.155 140.032 181.453 139.959 183.064L139.708 188.575C139.668 189.456 138.991 190.176 138.114 190.27C137.237 190.364 136.423 189.804 136.197 188.951L134.785 183.618Z" fill="#FFE5A4"/>
+            <path d="M113.931 180.572C113.882 179.196 115.034 178.081 116.407 178.174C117.78 178.267 118.771 179.527 118.538 180.883L117.07 189.403C116.946 190.123 116.297 190.633 115.568 190.584C114.838 190.534 114.264 189.942 114.238 189.211L113.931 180.572Z" fill="#FFE5A4"/>
+            <path d="M126.689 181.22C127.252 179.739 126.395 178.099 124.857 177.718C123.32 177.336 121.795 178.384 121.601 179.956L120.629 187.824C120.524 188.668 121.067 189.456 121.892 189.661C122.717 189.866 123.565 189.423 123.868 188.628L126.689 181.22Z" fill="#FFE5A4"/>
+            <rect x="113" y="226" width="28" height="14" rx="2" fill="white"/>
+        </svg>
+
+        <!-- Sunset Illustration (sunset.svg) -->
+        <svg id="svg-sunset-template" class="w-[300px] h-auto" viewBox="0 0 460 270" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M279.798 88.5047C281.294 57.2571 290.074 44.6912 317.078 29.0381" stroke-width="18" stroke-linecap="round" stroke="#00FF00"/>
+            <path d="M218.832 18.7201C251.887 4.04371 268.41 9.25709 287.837 41.2899C289.613 44.2188 288.453 48.054 285.346 49.4964C251.273 65.3154 235.119 58.7928 216.222 26.9318C214.463 23.9662 215.68 20.1193 218.832 18.7201Z" fill="#00FF00"/>
+            <path d="M283 66.2256C349.274 66.2256 403 119.952 403 186.226C403 197.775 401.368 208.943 398.321 219.512C393.872 234.951 380.259 245.531 364.568 248.989C338.645 254.702 311.284 257.761 283.002 257.761C254.718 257.761 227.355 254.702 201.43 248.988C185.739 245.53 172.126 234.95 167.677 219.511C164.632 208.942 163 197.774 163 186.226C163 119.952 216.726 66.2256 283 66.2256Z" fill="#FE700E"/>
+            <rect y="246" width="460" height="24" rx="12" fill="#FFE5A4"/>
+            <path d="M132.469 238.499C132.205 242.715 128.709 246 124.484 246H55.5156C51.2911 246 47.7947 242.715 47.5312 238.499L42.5312 158.499C42.2433 153.893 45.901 150 50.5156 150H129.484C134.099 150 137.757 153.893 137.469 158.499L132.469 238.499Z" fill="#F4CF9A"/>
+            <rect x="37" y="150" width="106" height="28" rx="8" fill="#FFE5BF"/>
+        </svg>
+
+        <!-- Night Illustration (night.svg) -->
+        <svg id="svg-night-template" viewBox="0 0 600 597" class="w-[450px] h-auto" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            <path d="M292 221.262C295.739 143.143 317.691 111.729 385.2 72.5957" stroke-width="38" stroke-linecap="round" stroke="#00FF00"/>
+            <path d="M142.45 45.5386C222.27 10.8179 263.162 23.7721 310.47 100.567C315.86 109.317 312.391 120.785 303.038 125.041C220.743 162.481 180.701 146.475 134.668 70.0243C129.332 61.1627 132.965 49.6647 142.45 45.5386Z" fill="#00FF00"/>
+            <path d="M300 165.562C465.685 165.562 600 299.876 600 465.562C600 512.467 589.234 556.858 570.04 596.399H29.96C10.7661 556.858 0 512.467 0 465.562C0 299.876 134.315 165.562 300 165.562Z" fill="#FE700E"/>
+            <use xlink:href="#stroke0_1572_379" fill="#FE700E"/>
+            <use xlink:href="#stroke0_1572_379" fill="white" fill-opacity="0.6"/>
+            <circle cx="178" cy="495.999" r="9" fill="#FE700E"/>
+            <defs>
+                <path id="stroke0_1572_379" d="M81 419.999C81 406.744 91.7452 395.999 105 395.999H172C185.255 395.999 196 406.744 196 419.999V595.999H81V419.999Z"/>
+            </defs>
+        </svg>
+    </div>
+
+    <!-- Clock and Theme Management Logic -->
+    <script>
+        let overrideMode = 'auto'; // 'auto', 'morning', 'sunset', 'night'
+        let currentActiveTheme = '';
+
+        function updateClock() {
+            const now = new Date();
+
+            // Date formatting: DD/MM/YYYY Day
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            const dayStr = dayNames[now.getDay()];
+
+            document.getElementById('dateDisplay').textContent = `${dd}/${mm}/${yyyy} ${dayStr}`;
+
+            // Time formatting: HH:MM
+            const hh = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            document.getElementById('timeDisplay').textContent = `${hh}:${min}`;
+
+            // Determine Theme based on Time or Override
+            let themeToApply = overrideMode;
+            if (overrideMode === 'auto') {
+                const hour = now.getHours();
+                if (hour >= 6 && hour < 17) {
+                    themeToApply = 'morning';
+                } else if (hour >= 17 && hour < 19) {
+                    themeToApply = 'sunset';
+                } else {
+                    themeToApply = 'night';
+                }
+            }
+
+            if (themeToApply !== currentActiveTheme) {
+                applyTheme(themeToApply);
+            }
+        }
+
+        function applyTheme(theme) {
+            currentActiveTheme = theme;
+            const body = document.getElementById('bodyTheme');
+            const sky = document.getElementById('skyContainer');
+            const illustrationContainer = document.getElementById('illustrationContainer');
+
+            // Reset Classes
+            body.className = `w-screen h-screen flex flex-col justify-between relative theme-transition theme-${theme}`;
+
+            // Clear Dynamic Layers
+            sky.innerHTML = '';
+            illustrationContainer.innerHTML = '';
+
+            if (theme === 'morning') {
+                // Render Clouds in Sky
+                sky.innerHTML = `
+                    <div class="absolute top-[8%] left-[5%] w-48 md:w-64 opacity-80 animate-cloud-1">
+                        ${document.getElementById('svg-cloud-template').outerHTML}
+                    </div>
+                    <div class="absolute top-[18%] left-[30%] w-64 md:w-80 opacity-60 animate-cloud-2">
+                        ${document.getElementById('svg-cloud-template').outerHTML}
+                    </div>
+                    <div class="absolute top-[5%] right-[10%] w-56 md:w-72 opacity-75 animate-cloud-1">
+                        ${document.getElementById('svg-cloud-template').outerHTML}
+                    </div>
+                `;
+                // Load Morning SVG Illustration
+                illustrationContainer.innerHTML = document.getElementById('svg-morning-template').outerHTML;
+
+            } else if (theme === 'sunset') {
+                // Render Sun Glow fixed at the top-left corner
+                sky.innerHTML = `
+                    <div class="fixed top-0 left-0 w-[16rem] h-[16rem] rounded-full sun-glow pointer-events-none"></div>
+                `;
+
+                // Load Sunset SVG Illustration
+                illustrationContainer.innerHTML = document.getElementById('svg-sunset-template').outerHTML;
+            } else if (theme === 'night') {
+                // Render Stars scattered across Night Sky
+                const starLocations = [
+                    { top: '10%', left: '8%', size: 'w-6 h-6', delay: '0s' },
+                    { top: '18%', left: '22%', size: 'w-4 h-4', delay: '0.7s' },
+                    { top: '8%', left: '36%', size: 'w-7 h-7', delay: '1.2s' },
+                    { top: '22%', left: '50%', size: 'w-5 h-5', delay: '0.3s' },
+                    { top: '7%', left: '64%', size: 'w-6 h-6', delay: '1.5s' },
+                    { top: '19%', left: '78%', size: 'w-4 h-4', delay: '0.9s' },
+                    { top: '11%', left: '90%', size: 'w-7 h-7', delay: '0.4s' },
+                    { top: '28%', left: '14%', size: 'w-5 h-5', delay: '1.8s' },
+                    { top: '30%', left: '85%', size: 'w-6 h-6', delay: '1.1s' }
+                ];
+
+                let starsHTML = '';
+                const starSVGCode = document.getElementById('svg-star-template').outerHTML;
+                starLocations.forEach(star => {
+                    starsHTML += `
+                        <div class="absolute ${star.size} animate-star" style="top: ${star.top}; left: ${star.left}; animation-delay: ${star.delay}">
+                            ${starSVGCode}
+                        </div>
+                    `;
+                });
+                sky.innerHTML = starsHTML;
+
+                // Load Night SVG Illustration
+                illustrationContainer.innerHTML = document.getElementById('svg-night-template').outerHTML;
+            }
+        }
+
+        // Initialize clock and timer
+        updateClock();
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>
